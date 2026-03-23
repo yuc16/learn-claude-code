@@ -39,6 +39,7 @@ from pathlib import Path
 
 from anthropic import Anthropic
 from dotenv import load_dotenv
+import readline
 
 load_dotenv(override=True)
 
@@ -391,7 +392,9 @@ class WorktreeManager:
         except subprocess.TimeoutExpired:
             return "Error: Timeout (300s)"
 
-    def remove(self, name: str, force: bool = False, complete_task: bool = False) -> str:
+    def remove(
+        self, name: str, force: bool = False, complete_task: bool = False
+    ) -> str:
         wt = self._find(name)
         if not wt:
             return f"Error: Unknown worktree '{name}'"
@@ -468,7 +471,9 @@ class WorktreeManager:
                 "status": "kept",
             },
         )
-        return json.dumps(kept, indent=2) if kept else f"Error: Unknown worktree '{name}'"
+        return (
+            json.dumps(kept, indent=2) if kept else f"Error: Unknown worktree '{name}'"
+        )
 
 
 WORKTREES = WorktreeManager(REPO_ROOT, TASKS, EVENTS)
@@ -541,14 +546,22 @@ TOOL_HANDLERS = {
     "task_create": lambda **kw: TASKS.create(kw["subject"], kw.get("description", "")),
     "task_list": lambda **kw: TASKS.list_all(),
     "task_get": lambda **kw: TASKS.get(kw["task_id"]),
-    "task_update": lambda **kw: TASKS.update(kw["task_id"], kw.get("status"), kw.get("owner")),
-    "task_bind_worktree": lambda **kw: TASKS.bind_worktree(kw["task_id"], kw["worktree"], kw.get("owner", "")),
-    "worktree_create": lambda **kw: WORKTREES.create(kw["name"], kw.get("task_id"), kw.get("base_ref", "HEAD")),
+    "task_update": lambda **kw: TASKS.update(
+        kw["task_id"], kw.get("status"), kw.get("owner")
+    ),
+    "task_bind_worktree": lambda **kw: TASKS.bind_worktree(
+        kw["task_id"], kw["worktree"], kw.get("owner", "")
+    ),
+    "worktree_create": lambda **kw: WORKTREES.create(
+        kw["name"], kw.get("task_id"), kw.get("base_ref", "HEAD")
+    ),
     "worktree_list": lambda **kw: WORKTREES.list_all(),
     "worktree_status": lambda **kw: WORKTREES.status(kw["name"]),
     "worktree_run": lambda **kw: WORKTREES.run(kw["name"], kw["command"]),
     "worktree_keep": lambda **kw: WORKTREES.keep(kw["name"]),
-    "worktree_remove": lambda **kw: WORKTREES.remove(kw["name"], kw.get("force", False), kw.get("complete_task", False)),
+    "worktree_remove": lambda **kw: WORKTREES.remove(
+        kw["name"], kw.get("force", False), kw.get("complete_task", False)
+    ),
     "worktree_events": lambda **kw: EVENTS.list_recent(kw.get("limit", 20)),
 }
 
@@ -744,7 +757,11 @@ def agent_loop(messages: list):
             if block.type == "tool_use":
                 handler = TOOL_HANDLERS.get(block.name)
                 try:
-                    output = handler(**block.input) if handler else f"Unknown tool: {block.name}"
+                    output = (
+                        handler(**block.input)
+                        if handler
+                        else f"Unknown tool: {block.name}"
+                    )
                 except Exception as e:
                     output = f"Error: {e}"
                 print(f"> {block.name}: {str(output)[:200]}")

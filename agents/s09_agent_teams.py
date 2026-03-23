@@ -52,6 +52,7 @@ from pathlib import Path
 
 from anthropic import Anthropic
 from dotenv import load_dotenv
+import readline
 
 load_dotenv(override=True)
 if os.getenv("ANTHROPIC_BASE_URL"):
@@ -63,7 +64,9 @@ MODEL = os.environ["MODEL_ID"]
 TEAM_DIR = WORKDIR / ".team"
 INBOX_DIR = TEAM_DIR / "inbox"
 
-SYSTEM = f"You are a team lead at {WORKDIR}. Spawn teammates and communicate via inboxes."
+SYSTEM = (
+    f"You are a team lead at {WORKDIR}. Spawn teammates and communicate via inboxes."
+)
 
 VALID_MSG_TYPES = {
     "message",
@@ -80,8 +83,14 @@ class MessageBus:
         self.dir = inbox_dir
         self.dir.mkdir(parents=True, exist_ok=True)
 
-    def send(self, sender: str, to: str, content: str,
-             msg_type: str = "message", extra: dict = None) -> str:
+    def send(
+        self,
+        sender: str,
+        to: str,
+        content: str,
+        msg_type: str = "message",
+        extra: dict = None,
+    ) -> str:
         if msg_type not in VALID_MSG_TYPES:
             return f"Error: Invalid type '{msg_type}'. Valid: {VALID_MSG_TYPES}"
         msg = {
@@ -192,11 +201,13 @@ class TeammateManager:
                 if block.type == "tool_use":
                     output = self._exec(name, block.name, block.input)
                     print(f"  [{name}] {block.name}: {str(output)[:120]}")
-                    results.append({
-                        "type": "tool_result",
-                        "tool_use_id": block.id,
-                        "content": str(output),
-                    })
+                    results.append(
+                        {
+                            "type": "tool_result",
+                            "tool_use_id": block.id,
+                            "content": str(output),
+                        }
+                    )
             messages.append({"role": "user", "content": results})
         member = self._find_member(name)
         if member and member["status"] != "shutdown":
@@ -214,7 +225,9 @@ class TeammateManager:
         if tool_name == "edit_file":
             return _run_edit(args["path"], args["old_text"], args["new_text"])
         if tool_name == "send_message":
-            return BUS.send(sender, args["to"], args["content"], args.get("msg_type", "message"))
+            return BUS.send(
+                sender, args["to"], args["content"], args.get("msg_type", "message")
+            )
         if tool_name == "read_inbox":
             return json.dumps(BUS.read_inbox(sender), indent=2)
         return f"Unknown tool: {tool_name}"
@@ -222,18 +235,67 @@ class TeammateManager:
     def _teammate_tools(self) -> list:
         # these base tools are unchanged from s02
         return [
-            {"name": "bash", "description": "Run a shell command.",
-             "input_schema": {"type": "object", "properties": {"command": {"type": "string"}}, "required": ["command"]}},
-            {"name": "read_file", "description": "Read file contents.",
-             "input_schema": {"type": "object", "properties": {"path": {"type": "string"}}, "required": ["path"]}},
-            {"name": "write_file", "description": "Write content to file.",
-             "input_schema": {"type": "object", "properties": {"path": {"type": "string"}, "content": {"type": "string"}}, "required": ["path", "content"]}},
-            {"name": "edit_file", "description": "Replace exact text in file.",
-             "input_schema": {"type": "object", "properties": {"path": {"type": "string"}, "old_text": {"type": "string"}, "new_text": {"type": "string"}}, "required": ["path", "old_text", "new_text"]}},
-            {"name": "send_message", "description": "Send message to a teammate.",
-             "input_schema": {"type": "object", "properties": {"to": {"type": "string"}, "content": {"type": "string"}, "msg_type": {"type": "string", "enum": list(VALID_MSG_TYPES)}}, "required": ["to", "content"]}},
-            {"name": "read_inbox", "description": "Read and drain your inbox.",
-             "input_schema": {"type": "object", "properties": {}}},
+            {
+                "name": "bash",
+                "description": "Run a shell command.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {"command": {"type": "string"}},
+                    "required": ["command"],
+                },
+            },
+            {
+                "name": "read_file",
+                "description": "Read file contents.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {"path": {"type": "string"}},
+                    "required": ["path"],
+                },
+            },
+            {
+                "name": "write_file",
+                "description": "Write content to file.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "path": {"type": "string"},
+                        "content": {"type": "string"},
+                    },
+                    "required": ["path", "content"],
+                },
+            },
+            {
+                "name": "edit_file",
+                "description": "Replace exact text in file.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "path": {"type": "string"},
+                        "old_text": {"type": "string"},
+                        "new_text": {"type": "string"},
+                    },
+                    "required": ["path", "old_text", "new_text"],
+                },
+            },
+            {
+                "name": "send_message",
+                "description": "Send message to a teammate.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "to": {"type": "string"},
+                        "content": {"type": "string"},
+                        "msg_type": {"type": "string", "enum": list(VALID_MSG_TYPES)},
+                    },
+                    "required": ["to", "content"],
+                },
+            },
+            {
+                "name": "read_inbox",
+                "description": "Read and drain your inbox.",
+                "input_schema": {"type": "object", "properties": {}},
+            },
         ]
 
     def list_all(self) -> str:
@@ -265,8 +327,12 @@ def _run_bash(command: str) -> str:
         return "Error: Dangerous command blocked"
     try:
         r = subprocess.run(
-            command, shell=True, cwd=WORKDIR,
-            capture_output=True, text=True, timeout=120,
+            command,
+            shell=True,
+            cwd=WORKDIR,
+            capture_output=True,
+            text=True,
+            timeout=120,
         )
         out = (r.stdout + r.stderr).strip()
         return out[:50000] if out else "(no output)"
@@ -308,37 +374,106 @@ def _run_edit(path: str, old_text: str, new_text: str) -> str:
 
 # -- Lead tool dispatch (9 tools) --
 TOOL_HANDLERS = {
-    "bash":            lambda **kw: _run_bash(kw["command"]),
-    "read_file":       lambda **kw: _run_read(kw["path"], kw.get("limit")),
-    "write_file":      lambda **kw: _run_write(kw["path"], kw["content"]),
-    "edit_file":       lambda **kw: _run_edit(kw["path"], kw["old_text"], kw["new_text"]),
-    "spawn_teammate":  lambda **kw: TEAM.spawn(kw["name"], kw["role"], kw["prompt"]),
-    "list_teammates":  lambda **kw: TEAM.list_all(),
-    "send_message":    lambda **kw: BUS.send("lead", kw["to"], kw["content"], kw.get("msg_type", "message")),
-    "read_inbox":      lambda **kw: json.dumps(BUS.read_inbox("lead"), indent=2),
-    "broadcast":       lambda **kw: BUS.broadcast("lead", kw["content"], TEAM.member_names()),
+    "bash": lambda **kw: _run_bash(kw["command"]),
+    "read_file": lambda **kw: _run_read(kw["path"], kw.get("limit")),
+    "write_file": lambda **kw: _run_write(kw["path"], kw["content"]),
+    "edit_file": lambda **kw: _run_edit(kw["path"], kw["old_text"], kw["new_text"]),
+    "spawn_teammate": lambda **kw: TEAM.spawn(kw["name"], kw["role"], kw["prompt"]),
+    "list_teammates": lambda **kw: TEAM.list_all(),
+    "send_message": lambda **kw: BUS.send(
+        "lead", kw["to"], kw["content"], kw.get("msg_type", "message")
+    ),
+    "read_inbox": lambda **kw: json.dumps(BUS.read_inbox("lead"), indent=2),
+    "broadcast": lambda **kw: BUS.broadcast("lead", kw["content"], TEAM.member_names()),
 }
 
 # these base tools are unchanged from s02
 TOOLS = [
-    {"name": "bash", "description": "Run a shell command.",
-     "input_schema": {"type": "object", "properties": {"command": {"type": "string"}}, "required": ["command"]}},
-    {"name": "read_file", "description": "Read file contents.",
-     "input_schema": {"type": "object", "properties": {"path": {"type": "string"}, "limit": {"type": "integer"}}, "required": ["path"]}},
-    {"name": "write_file", "description": "Write content to file.",
-     "input_schema": {"type": "object", "properties": {"path": {"type": "string"}, "content": {"type": "string"}}, "required": ["path", "content"]}},
-    {"name": "edit_file", "description": "Replace exact text in file.",
-     "input_schema": {"type": "object", "properties": {"path": {"type": "string"}, "old_text": {"type": "string"}, "new_text": {"type": "string"}}, "required": ["path", "old_text", "new_text"]}},
-    {"name": "spawn_teammate", "description": "Spawn a persistent teammate that runs in its own thread.",
-     "input_schema": {"type": "object", "properties": {"name": {"type": "string"}, "role": {"type": "string"}, "prompt": {"type": "string"}}, "required": ["name", "role", "prompt"]}},
-    {"name": "list_teammates", "description": "List all teammates with name, role, status.",
-     "input_schema": {"type": "object", "properties": {}}},
-    {"name": "send_message", "description": "Send a message to a teammate's inbox.",
-     "input_schema": {"type": "object", "properties": {"to": {"type": "string"}, "content": {"type": "string"}, "msg_type": {"type": "string", "enum": list(VALID_MSG_TYPES)}}, "required": ["to", "content"]}},
-    {"name": "read_inbox", "description": "Read and drain the lead's inbox.",
-     "input_schema": {"type": "object", "properties": {}}},
-    {"name": "broadcast", "description": "Send a message to all teammates.",
-     "input_schema": {"type": "object", "properties": {"content": {"type": "string"}}, "required": ["content"]}},
+    {
+        "name": "bash",
+        "description": "Run a shell command.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"command": {"type": "string"}},
+            "required": ["command"],
+        },
+    },
+    {
+        "name": "read_file",
+        "description": "Read file contents.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"path": {"type": "string"}, "limit": {"type": "integer"}},
+            "required": ["path"],
+        },
+    },
+    {
+        "name": "write_file",
+        "description": "Write content to file.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"path": {"type": "string"}, "content": {"type": "string"}},
+            "required": ["path", "content"],
+        },
+    },
+    {
+        "name": "edit_file",
+        "description": "Replace exact text in file.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string"},
+                "old_text": {"type": "string"},
+                "new_text": {"type": "string"},
+            },
+            "required": ["path", "old_text", "new_text"],
+        },
+    },
+    {
+        "name": "spawn_teammate",
+        "description": "Spawn a persistent teammate that runs in its own thread.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string"},
+                "role": {"type": "string"},
+                "prompt": {"type": "string"},
+            },
+            "required": ["name", "role", "prompt"],
+        },
+    },
+    {
+        "name": "list_teammates",
+        "description": "List all teammates with name, role, status.",
+        "input_schema": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "send_message",
+        "description": "Send a message to a teammate's inbox.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "to": {"type": "string"},
+                "content": {"type": "string"},
+                "msg_type": {"type": "string", "enum": list(VALID_MSG_TYPES)},
+            },
+            "required": ["to", "content"],
+        },
+    },
+    {
+        "name": "read_inbox",
+        "description": "Read and drain the lead's inbox.",
+        "input_schema": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "broadcast",
+        "description": "Send a message to all teammates.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"content": {"type": "string"}},
+            "required": ["content"],
+        },
+    },
 ]
 
 
@@ -346,14 +481,18 @@ def agent_loop(messages: list):
     while True:
         inbox = BUS.read_inbox("lead")
         if inbox:
-            messages.append({
-                "role": "user",
-                "content": f"<inbox>{json.dumps(inbox, indent=2)}</inbox>",
-            })
-            messages.append({
-                "role": "assistant",
-                "content": "Noted inbox messages.",
-            })
+            messages.append(
+                {
+                    "role": "user",
+                    "content": f"<inbox>{json.dumps(inbox, indent=2)}</inbox>",
+                }
+            )
+            messages.append(
+                {
+                    "role": "assistant",
+                    "content": "Noted inbox messages.",
+                }
+            )
         response = client.messages.create(
             model=MODEL,
             system=SYSTEM,
@@ -369,15 +508,21 @@ def agent_loop(messages: list):
             if block.type == "tool_use":
                 handler = TOOL_HANDLERS.get(block.name)
                 try:
-                    output = handler(**block.input) if handler else f"Unknown tool: {block.name}"
+                    output = (
+                        handler(**block.input)
+                        if handler
+                        else f"Unknown tool: {block.name}"
+                    )
                 except Exception as e:
                     output = f"Error: {e}"
                 print(f"> {block.name}: {str(output)[:200]}")
-                results.append({
-                    "type": "tool_result",
-                    "tool_use_id": block.id,
-                    "content": str(output),
-                })
+                results.append(
+                    {
+                        "type": "tool_result",
+                        "tool_use_id": block.id,
+                        "content": str(output),
+                    }
+                )
         messages.append({"role": "user", "content": results})
 
 
