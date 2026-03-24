@@ -176,6 +176,10 @@ def run_subagent(prompt: str) -> str:
                 output = (
                     handler(**block.input) if handler else f"Unknown tool: {block.name}"
                 )
+                print("子代理使用的工具")
+                print(f"> {block.name}")
+                print(f"> {block.input}")
+                print(str(output))
                 results.append(
                     {
                         "type": "tool_result",
@@ -228,7 +232,7 @@ def agent_loop(messages: list):
             if block.type == "tool_use":
                 if block.name == "task":
                     desc = block.input.get("description", "subtask")
-                    print(f"> task ({desc}): {block.input['prompt'][:80]}")
+                    print(f"> task ({desc}): {block.input['prompt']}")
                     output = run_subagent(block.input["prompt"])
                 else:
                     handler = TOOL_HANDLERS.get(block.name)
@@ -237,7 +241,7 @@ def agent_loop(messages: list):
                         if handler
                         else f"Unknown tool: {block.name}"
                     )
-                print(f"  {str(output)[:200]}")
+                print(f"  {str(output)}")
                 results.append(
                     {
                         "type": "tool_result",

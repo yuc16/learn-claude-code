@@ -63,7 +63,7 @@ class TaskManager:
 
     def _save(self, task: dict):
         path = self.dir / f"task_{task['id']}.json"
-        path.write_text(json.dumps(task, indent=2))
+        path.write_text(json.dumps(task, indent=2, ensure_ascii=False))
 
     def create(self, subject: str, description: str = "") -> str:
         task = {
@@ -77,10 +77,10 @@ class TaskManager:
         }
         self._save(task)
         self._next_id += 1
-        return json.dumps(task, indent=2)
+        return json.dumps(task, indent=2, ensure_ascii=False)
 
     def get(self, task_id: int) -> str:
-        return json.dumps(self._load(task_id), indent=2)
+        return json.dumps(self._load(task_id), indent=2, ensure_ascii=False)
 
     def update(
         self,
@@ -111,7 +111,7 @@ class TaskManager:
                 except ValueError:
                     pass
         self._save(task)
-        return json.dumps(task, indent=2)
+        return json.dumps(task, indent=2, ensure_ascii=False)
 
     def _clear_dependency(self, completed_id: int):
         """Remove completed_id from all other tasks' blockedBy lists."""
@@ -323,7 +323,9 @@ def agent_loop(messages: list):
                     )
                 except Exception as e:
                     output = f"Error: {e}"
-                print(f"> {block.name}: {str(output)[:200]}")
+                print(f"> {block.name}")
+                print(f"> {block.input}")
+                print(str(output))
                 results.append(
                     {
                         "type": "tool_result",
