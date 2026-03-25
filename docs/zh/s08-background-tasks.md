@@ -106,6 +106,6 @@ python agents/s08_background_tasks.py
 
 试试这些 prompt (英文 prompt 对 LLM 效果更好, 也可以用中文):
 
-1. `Run "sleep 5 && echo done" in the background, then create a file while it runs`
+1. `Run "sleep 50 && echo done" in the background, then create a file while it runs，两个任务都完成才算成功`
 2. `Start 3 background tasks: "sleep 2", "sleep 4", "sleep 6". Check their status.`
 3. `Run pytest in the background and keep working on other things`

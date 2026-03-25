@@ -90,8 +90,8 @@ class BackgroundManager:
                 {
                     "task_id": task_id,
                     "status": status,
-                    "command": command[:80],
-                    "result": (output or "(no output)")[:500],
+                    "command": command,
+                    "result": (output or "(no output)"),
                 }
             )
 

@@ -5,7 +5,7 @@
   "scripts": {
     "extract": "tsx scripts/extract-content.ts",
     "predev": "npm run extract",
-    "dev": "next dev",
+    "dev": "next dev --webpack",
     "prebuild": "npm run extract",
     "build": "next build",
     "start": "next start"
