@@ -291,7 +291,9 @@ def agent_loop(messages: list):
                         )
                     except Exception as e:
                         output = f"Error: {e}"
-                print(f"> {block.name}: {str(output)[:200]}")
+                print(f"> {block.name}")
+                print(f"> {block.input}")
+                print(str(output))
                 results.append(
                     {
                         "type": "tool_result",
