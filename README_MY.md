@@ -327,3 +327,17 @@ uv run python agents/login_openai_codex.py
 ```bash
 uv run python agents/s07_task_system.py
 ```
+
+预览 demo 目录下的纯前端页面（例如连连看）：
+
+```bash
+uv run python -m http.server 8000
+```
+
+然后在浏览器打开：
+
+```text
+http://127.0.0.1:8000/demo/lianliankan.html
+```
+
+如果你希望后续用 Python 包方式扩展本地服务能力，项目也已经通过 uv 管理了 `aiohttp` 开发依赖。

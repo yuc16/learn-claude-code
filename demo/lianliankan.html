@@ -1,0 +1,777 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>连连看小游戏</title>
+  <style>
+    :root {
+      --bg1: #0f172a;
+      --bg2: #1e293b;
+      --panel: rgba(15, 23, 42, 0.82);
+      --text: #e2e8f0;
+      --muted: #94a3b8;
+      --accent: #38bdf8;
+      --accent2: #22c55e;
+      --danger: #f97316;
+      --tile: #f8fafc;
+      --tile-border: #cbd5e1;
+      --selected: #facc15;
+      --empty: rgba(255,255,255,0.05);
+    }
+
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      min-height: 100%;
+    }
+
+    body {
+      min-height: 100vh;
+      min-height: 100dvh;
+      font-family: "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+      color: var(--text);
+      background: radial-gradient(circle at top, #1d4ed8 0%, var(--bg1) 35%, #020617 100%);
+      padding: 12px;
+      overflow: hidden;
+    }
+
+    .app {
+      width: min(1180px, 100%);
+      height: calc(100vh - 24px);
+      height: calc(100dvh - 24px);
+      margin: 0 auto;
+      background: rgba(2, 6, 23, 0.6);
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      border-radius: 24px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.35);
+      overflow: hidden;
+      backdrop-filter: blur(10px);
+      display: grid;
+      grid-template-rows: auto 1fr;
+    }
+
+    .header {
+      padding: 14px 18px;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.15);
+      background: linear-gradient(135deg, rgba(56,189,248,.16), rgba(34,197,94,.12));
+    }
+
+    .header h1 {
+      margin: 0 0 6px;
+      font-size: clamp(22px, 3vw, 32px);
+      line-height: 1.2;
+    }
+
+    .header p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.45;
+      font-size: 14px;
+    }
+
+    .main {
+      min-height: 0;
+      display: grid;
+      grid-template-columns: 270px minmax(0, 1fr);
+      gap: 14px;
+      padding: 14px;
+    }
+
+    .sidebar, .board-wrap {
+      background: var(--panel);
+      border: 1px solid rgba(148, 163, 184, 0.12);
+      border-radius: 20px;
+      padding: 14px;
+      position: relative;
+      min-height: 0;
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+
+    .card {
+      background: rgba(30, 41, 59, 0.82);
+      border: 1px solid rgba(148, 163, 184, 0.12);
+      border-radius: 14px;
+      padding: 12px;
+    }
+
+    .card .label {
+      color: var(--muted);
+      font-size: 12px;
+      margin-bottom: 6px;
+    }
+
+    .card .value {
+      font-size: 21px;
+      font-weight: 700;
+      line-height: 1.1;
+    }
+
+    .controls {
+      display: grid;
+      gap: 10px;
+      margin: 12px 0;
+    }
+
+    button {
+      border: none;
+      border-radius: 14px;
+      padding: 12px 16px;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: transform .15s ease, opacity .2s ease, box-shadow .2s ease;
+    }
+
+    button:hover { transform: translateY(-1px); }
+    button:active { transform: translateY(0); }
+
+    .primary { background: linear-gradient(135deg, var(--accent), #2563eb); color: white; }
+    .success { background: linear-gradient(135deg, var(--accent2), #16a34a); color: white; }
+    .warn { background: linear-gradient(135deg, var(--danger), #ea580c); color: white; }
+
+    .tips {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.55;
+    }
+
+    .status {
+      margin-top: 12px;
+      min-height: 42px;
+      padding: 10px 12px;
+      border-radius: 14px;
+      background: rgba(15, 23, 42, 0.9);
+      border: 1px solid rgba(148, 163, 184, 0.12);
+      color: #dbeafe;
+      line-height: 1.4;
+      font-size: 14px;
+    }
+
+    .board-wrap {
+      min-height: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+
+    .board-area {
+      position: relative;
+      width: min(100%, 100%);
+      height: min(100%, calc(100dvh - 180px));
+      aspect-ratio: 10 / 8;
+      max-width: calc((100dvh - 180px) * 1.25);
+      max-height: 100%;
+      min-height: 260px;
+    }
+
+    #pathCanvas {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 2;
+    }
+
+    .board {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      grid-template-columns: repeat(10, 1fr);
+      grid-template-rows: repeat(8, 1fr);
+      gap: 8px;
+      z-index: 1;
+    }
+
+    .tile {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 14px;
+      background: linear-gradient(180deg, #ffffff, #e2e8f0);
+      color: #0f172a;
+      border: 2px solid var(--tile-border);
+      font-size: clamp(16px, 2vw, 30px);
+      user-select: none;
+      cursor: pointer;
+      box-shadow: 0 4px 10px rgba(15,23,42,.16);
+      transition: transform .18s ease, border-color .18s ease, box-shadow .18s ease, opacity .18s ease;
+      min-width: 0;
+      min-height: 0;
+    }
+
+    .tile:hover { transform: translateY(-2px) scale(1.02); }
+    .tile.selected {
+      border-color: var(--selected);
+      box-shadow: 0 0 0 4px rgba(250, 204, 21, 0.24), 0 8px 20px rgba(0,0,0,.22);
+      transform: scale(1.03);
+    }
+    .tile.hint {
+      border-color: #4ade80;
+      box-shadow: 0 0 0 4px rgba(74, 222, 128, 0.22);
+    }
+    .tile.removed {
+      opacity: 0;
+      transform: scale(.75);
+      pointer-events: none;
+    }
+
+    .overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(2, 6, 23, 0.72);
+      z-index: 4;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      border-radius: 18px;
+      padding: 20px;
+    }
+
+    .overlay.show { display: flex; }
+
+    .overlay-box {
+      max-width: 420px;
+      background: rgba(15, 23, 42, 0.96);
+      border: 1px solid rgba(148, 163, 184, 0.16);
+      border-radius: 20px;
+      padding: 28px;
+    }
+
+    .overlay-box h2 { margin-top: 0; font-size: 30px; }
+    .overlay-box p { color: var(--muted); line-height: 1.7; }
+
+    @media (max-width: 900px) {
+      body {
+        padding: 8px;
+        overflow-y: auto;
+      }
+      .app {
+        height: auto;
+        min-height: calc(100dvh - 16px);
+      }
+      .main {
+        grid-template-columns: 1fr;
+      }
+      .board-wrap {
+        overflow: auto;
+      }
+      .board-area {
+        width: min(100%, 720px);
+        height: auto;
+        max-width: 100%;
+      }
+    }
+
+    @media (max-width: 640px) {
+      body { padding: 6px; }
+      .app {
+        min-height: calc(100dvh - 12px);
+        border-radius: 18px;
+      }
+      .header {
+        padding: 12px;
+      }
+      .header p {
+        font-size: 13px;
+      }
+      .main { padding: 12px; }
+      .board { gap: 4px; }
+      .tile {
+        border-radius: 10px;
+        border-width: 2px;
+        font-size: clamp(13px, 4.6vw, 22px);
+      }
+      .board-area {
+        width: 100%;
+        min-height: 220px;
+      }
+      .stats {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="header">
+      <h1>连连看小游戏</h1>
+      <p>规则：点击两个相同图案，如果它们之间能用不超过 <strong>3 段直线</strong> 连接（最多 2 次拐弯），就能消除。支持提示、洗牌、重新开始。</p>
+    </div>
+
+    <div class="main">
+      <aside class="sidebar">
+        <div class="stats">
+          <div class="card">
+            <div class="label">剩余方块</div>
+            <div class="value" id="remainCount">0</div>
+          </div>
+          <div class="card">
+            <div class="label">已消除</div>
+            <div class="value" id="score">0</div>
+          </div>
+          <div class="card">
+            <div class="label">用时</div>
+            <div class="value" id="timer">00:00</div>
+          </div>
+          <div class="card">
+            <div class="label">提示次数</div>
+            <div class="value" id="hintCount">3</div>
+          </div>
+        </div>
+
+        <div class="controls">
+          <button class="primary" id="restartBtn">重新开始</button>
+          <button class="success" id="shuffleBtn">洗牌</button>
+          <button class="warn" id="hintBtn">提示一对</button>
+        </div>
+
+        <div class="tips">
+          <strong>玩法提示：</strong><br>
+          1. 先选中一个图案，再选同样的另一个图案。<br>
+          2. 只有路径不穿过其他方块时才能消除。<br>
+          3. 如果局面无解，可点击“洗牌”。<br>
+          4. 页面完全由原生 HTML/CSS/JS 编写，无任何前端框架。
+        </div>
+
+        <div class="status" id="statusText">游戏已准备好，开始找相同图案吧！</div>
+      </aside>
+
+      <section class="board-wrap">
+        <div class="board-area">
+          <canvas id="pathCanvas"></canvas>
+          <div class="board" id="board"></div>
+          <div class="overlay" id="overlay">
+            <div class="overlay-box">
+              <h2 id="overlayTitle">恭喜过关！</h2>
+              <p id="overlayText">你成功消除了所有方块。</p>
+              <button class="primary" id="playAgainBtn">再来一局</button>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <script>
+    const ROWS = 8;
+    const COLS = 10;
+    const TOTAL = ROWS * COLS;
+    const HINT_LIMIT = 3;
+    const ICONS = ['🍎','🍌','🍇','🍉','🍒','🥝','🍋','🍑','🥥','🍍','🥕','🌽','🍄','🍪','🍩','🧁','⚽','🏀','🎾','🎲'];
+
+    const boardEl = document.getElementById('board');
+    const remainCountEl = document.getElementById('remainCount');
+    const scoreEl = document.getElementById('score');
+    const timerEl = document.getElementById('timer');
+    const hintCountEl = document.getElementById('hintCount');
+    const statusTextEl = document.getElementById('statusText');
+    const restartBtn = document.getElementById('restartBtn');
+    const shuffleBtn = document.getElementById('shuffleBtn');
+    const hintBtn = document.getElementById('hintBtn');
+    const overlay = document.getElementById('overlay');
+    const overlayTitle = document.getElementById('overlayTitle');
+    const overlayText = document.getElementById('overlayText');
+    const playAgainBtn = document.getElementById('playAgainBtn');
+    const canvas = document.getElementById('pathCanvas');
+    const ctx = canvas.getContext('2d');
+
+    let grid = [];
+    let selected = null;
+    let score = 0;
+    let remain = 0;
+    let hintLeft = HINT_LIMIT;
+    let timer = 0;
+    let timerId = null;
+    let lock = false;
+
+    function shuffle(array) {
+      const arr = [...array];
+      for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+      }
+      return arr;
+    }
+
+    function createLevelValues() {
+      const pairCount = TOTAL / 2;
+      const values = [];
+      for (let i = 0; i < pairCount; i++) {
+        const icon = ICONS[i % ICONS.length];
+        values.push(icon, icon);
+      }
+      return shuffle(values);
+    }
+
+    function createGrid() {
+      const values = createLevelValues();
+      const g = Array.from({ length: ROWS + 2 }, () => Array(COLS + 2).fill(null));
+      let idx = 0;
+      for (let r = 1; r <= ROWS; r++) {
+        for (let c = 1; c <= COLS; c++) {
+          g[r][c] = values[idx++];
+        }
+      }
+      return g;
+    }
+
+    function resetCanvas() {
+      const rect = boardEl.getBoundingClientRect();
+      canvas.width = rect.width * devicePixelRatio;
+      canvas.height = rect.height * devicePixelRatio;
+      canvas.style.width = rect.width + 'px';
+      canvas.style.height = rect.height + 'px';
+      ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+      ctx.clearRect(0, 0, rect.width, rect.height);
+    }
+
+    function setStatus(text) {
+      statusTextEl.textContent = text;
+    }
+
+    function formatTime(totalSec) {
+      const mm = String(Math.floor(totalSec / 60)).padStart(2, '0');
+      const ss = String(totalSec % 60).padStart(2, '0');
+      return `${mm}:${ss}`;
+    }
+
+    function updateStats() {
+      remainCountEl.textContent = remain;
+      scoreEl.textContent = score;
+      timerEl.textContent = formatTime(timer);
+      hintCountEl.textContent = hintLeft;
+    }
+
+    function startTimer() {
+      clearInterval(timerId);
+      timerId = setInterval(() => {
+        timer += 1;
+        updateStats();
+      }, 1000);
+    }
+
+    function stopTimer() {
+      clearInterval(timerId);
+      timerId = null;
+    }
+
+    function render() {
+      boardEl.innerHTML = '';
+      for (let r = 1; r <= ROWS; r++) {
+        for (let c = 1; c <= COLS; c++) {
+          const value = grid[r][c];
+          const btn = document.createElement('button');
+          btn.className = 'tile';
+          btn.dataset.row = r;
+          btn.dataset.col = c;
+          if (value) {
+            btn.textContent = value;
+            btn.addEventListener('click', () => handleTileClick(r, c));
+          } else {
+            btn.classList.add('removed');
+            btn.disabled = true;
+            btn.setAttribute('aria-hidden', 'true');
+          }
+          boardEl.appendChild(btn);
+        }
+      }
+      updateSelectionUI();
+      resetCanvas();
+    }
+
+    function getTileEl(r, c) {
+      return boardEl.querySelector(`.tile[data-row="${r}"][data-col="${c}"]`);
+    }
+
+    function updateSelectionUI() {
+      boardEl.querySelectorAll('.tile.selected, .tile.hint').forEach(el => {
+        el.classList.remove('selected', 'hint');
+      });
+      if (selected) {
+        const el = getTileEl(selected.r, selected.c);
+        if (el) el.classList.add('selected');
+      }
+    }
+
+    function isEmpty(r, c) {
+      return grid[r][c] === null;
+    }
+
+    function inside(r, c) {
+      return r >= 0 && r < ROWS + 2 && c >= 0 && c < COLS + 2;
+    }
+
+    function canConnect(start, end) {
+      if (start.r === end.r && start.c === end.c) return null;
+      if (grid[start.r][start.c] !== grid[end.r][end.c]) return null;
+
+      const directions = [
+        { dr: -1, dc: 0 },
+        { dr: 1, dc: 0 },
+        { dr: 0, dc: -1 },
+        { dr: 0, dc: 1 }
+      ];
+
+      const queue = [{ r: start.r, c: start.c, dir: -1, turns: 0, path: [{ r: start.r, c: start.c }] }];
+      const visited = new Map();
+      visited.set(`${start.r},${start.c},-1`, 0);
+
+      while (queue.length) {
+        const current = queue.shift();
+        for (let i = 0; i < directions.length; i++) {
+          const { dr, dc } = directions[i];
+          const nextTurns = current.dir === -1 || current.dir === i ? current.turns : current.turns + 1;
+          if (nextTurns > 2) continue;
+
+          let nr = current.r + dr;
+          let nc = current.c + dc;
+          while (inside(nr, nc)) {
+            if (!(nr === end.r && nc === end.c) && !isEmpty(nr, nc)) break;
+
+            const newPath = [...current.path];
+            const last = newPath[newPath.length - 1];
+            if (last.r !== nr || last.c !== nc) {
+              if (newPath.length === 1 || current.dir !== i) {
+                newPath.push({ r: nr, c: nc });
+              } else {
+                newPath[newPath.length - 1] = { r: nr, c: nc };
+              }
+            }
+
+            if (nr === end.r && nc === end.c) {
+              if (newPath[newPath.length - 1].r !== end.r || newPath[newPath.length - 1].c !== end.c) {
+                newPath.push({ r: end.r, c: end.c });
+              }
+              return simplifyPath(newPath);
+            }
+
+            const key = `${nr},${nc},${i}`;
+            if (!visited.has(key) || visited.get(key) > nextTurns) {
+              visited.set(key, nextTurns);
+              queue.push({ r: nr, c: nc, dir: i, turns: nextTurns, path: newPath });
+            }
+
+            nr += dr;
+            nc += dc;
+          }
+        }
+      }
+      return null;
+    }
+
+    function simplifyPath(path) {
+      if (path.length <= 2) return path;
+      const result = [path[0]];
+      for (let i = 1; i < path.length - 1; i++) {
+        const a = result[result.length - 1];
+        const b = path[i];
+        const c = path[i + 1];
+        const sameRow = a.r === b.r && b.r === c.r;
+        const sameCol = a.c === b.c && b.c === c.c;
+        if (!sameRow && !sameCol) result.push(b);
+      }
+      result.push(path[path.length - 1]);
+      return result;
+    }
+
+    function cellCenter(point) {
+      const rect = boardEl.getBoundingClientRect();
+      const cellW = rect.width / COLS;
+      const cellH = rect.height / ROWS;
+      return {
+        x: (point.c - 0.5) * cellW,
+        y: (point.r - 0.5) * cellH
+      };
+    }
+
+    function drawPath(path) {
+      resetCanvas();
+      ctx.strokeStyle = '#facc15';
+      ctx.lineWidth = 6;
+      ctx.lineJoin = 'round';
+      ctx.lineCap = 'round';
+      ctx.shadowColor = 'rgba(250, 204, 21, 0.55)';
+      ctx.shadowBlur = 12;
+      ctx.beginPath();
+      path.forEach((point, index) => {
+        const p = cellCenter(point);
+        if (index === 0) ctx.moveTo(p.x, p.y);
+        else ctx.lineTo(p.x, p.y);
+      });
+      ctx.stroke();
+      setTimeout(() => resetCanvas(), 260);
+    }
+
+    function clearSelection() {
+      selected = null;
+      updateSelectionUI();
+    }
+
+    function handleTileClick(r, c) {
+      if (lock || !grid[r][c]) return;
+      const value = grid[r][c];
+
+      if (!selected) {
+        selected = { r, c };
+        updateSelectionUI();
+        setStatus(`已选中 ${value}，请选择另一个相同图案。`);
+        return;
+      }
+
+      if (selected.r === r && selected.c === c) {
+        clearSelection();
+        setStatus('已取消选择。');
+        return;
+      }
+
+      if (grid[selected.r][selected.c] !== value) {
+        selected = { r, c };
+        updateSelectionUI();
+        setStatus(`图案不同，已改为选中 ${value}。`);
+        return;
+      }
+
+      const path = canConnect(selected, { r, c });
+      if (!path) {
+        selected = { r, c };
+        updateSelectionUI();
+        setStatus('这两个图案无法在 2 次拐弯内连通，请换一对。');
+        return;
+      }
+
+      lock = true;
+      drawPath(path);
+      const first = selected;
+      const second = { r, c };
+      const el1 = getTileEl(first.r, first.c);
+      const el2 = getTileEl(second.r, second.c);
+      if (el1) el1.classList.add('removed');
+      if (el2) el2.classList.add('removed');
+
+      setTimeout(() => {
+        grid[first.r][first.c] = null;
+        grid[second.r][second.c] = null;
+        remain -= 2;
+        score += 2;
+        clearSelection();
+        updateStats();
+        lock = false;
+
+        if (remain === 0) {
+          stopTimer();
+          overlayTitle.textContent = '恭喜过关！';
+          overlayText.textContent = `你用了 ${formatTime(timer)} 清空了全部方块，共消除 ${score} 个。`;
+          overlay.classList.add('show');
+          setStatus('太棒了，你已经完成本局游戏！');
+          return;
+        }
+
+        if (!findAnyMatch()) {
+          setStatus('当前局面无可消除配对，系统已自动洗牌。');
+          reshuffleBoard(true);
+        } else {
+          setStatus('消除成功，继续加油！');
+        }
+      }, 220);
+    }
+
+    function activeCells() {
+      const cells = [];
+      for (let r = 1; r <= ROWS; r++) {
+        for (let c = 1; c <= COLS; c++) {
+          if (grid[r][c]) cells.push({ r, c, value: grid[r][c] });
+        }
+      }
+      return cells;
+    }
+
+    function findAnyMatch() {
+      const cells = activeCells();
+      for (let i = 0; i < cells.length; i++) {
+        for (let j = i + 1; j < cells.length; j++) {
+          if (cells[i].value !== cells[j].value) continue;
+          const path = canConnect(cells[i], cells[j]);
+          if (path) return { a: cells[i], b: cells[j], path };
+        }
+      }
+      return null;
+    }
+
+    function reshuffleBoard(silent = false) {
+      const cells = activeCells();
+      if (cells.length <= 2) return;
+      let values = cells.map(item => item.value);
+      let matched = null;
+      for (let i = 0; i < 20; i++) {
+        values = shuffle(values);
+        cells.forEach((cell, index) => {
+          grid[cell.r][cell.c] = values[index];
+        });
+        matched = findAnyMatch();
+        if (matched) break;
+      }
+      render();
+      if (!silent) setStatus('已洗牌，快寻找新的可连接组合吧！');
+    }
+
+    function showHint() {
+      if (hintLeft <= 0) {
+        setStatus('提示次数已经用完啦。');
+        return;
+      }
+      const match = findAnyMatch();
+      if (!match) {
+        setStatus('当前找不到可消除组合，建议先洗牌。');
+        return;
+      }
+      hintLeft -= 1;
+      updateStats();
+      [match.a, match.b].forEach(item => {
+        const el = getTileEl(item.r, item.c);
+        if (el) el.classList.add('hint');
+      });
+      setStatus(`提示：试试连接这两个 ${match.a.value}。`);
+      setTimeout(() => {
+        boardEl.querySelectorAll('.tile.hint').forEach(el => el.classList.remove('hint'));
+      }, 1200);
+    }
+
+    function startGame() {
+      overlay.classList.remove('show');
+      score = 0;
+      remain = TOTAL;
+      hintLeft = HINT_LIMIT;
+      timer = 0;
+      selected = null;
+      lock = false;
+      grid = createGrid();
+      render();
+      while (!findAnyMatch()) {
+        grid = createGrid();
+        render();
+      }
+      updateStats();
+      setStatus('新游戏开始！请选择两个相同图案进行消除。');
+      startTimer();
+    }
+
+    restartBtn.addEventListener('click', startGame);
+    shuffleBtn.addEventListener('click', () => reshuffleBoard(false));
+    hintBtn.addEventListener('click', showHint);
+    playAgainBtn.addEventListener('click', startGame);
+    window.addEventListener('resize', resetCanvas);
+
+    startGame();
+  </script>
+</body>
+</html>
