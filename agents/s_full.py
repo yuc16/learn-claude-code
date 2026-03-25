@@ -245,7 +245,7 @@ def auto_compact(messages: list) -> list:
     path = TRANSCRIPT_DIR / f"transcript_{int(time.time())}.jsonl"
     with open(path, "w") as f:
         for msg in messages:
-            f.write(json.dumps(msg, default=str) + "\n")
+            f.write(json.dumps(msg, default=str, ensure_ascii=False) + "\n")
     conv_text = json.dumps(messages, default=str)[:80000]
     resp = client.messages.create(
         model=MODEL,
