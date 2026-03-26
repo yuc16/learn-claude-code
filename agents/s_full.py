@@ -246,7 +246,7 @@ def auto_compact(messages: list) -> list:
     with open(path, "w") as f:
         for msg in messages:
             f.write(json.dumps(msg, default=str, ensure_ascii=False) + "\n")
-    conv_text = json.dumps(messages, default=str)[:80000]
+    conv_text = json.dumps(messages, default=str, ensure_ascii=False)[:80000]
     resp = client.messages.create(
         model=MODEL,
         messages=[{"role": "user", "content": f"Summarize for continuity:\n{conv_text}"}],
@@ -274,16 +274,16 @@ class TaskManager:
         return json.loads(p.read_text())
 
     def _save(self, task: dict):
-        (TASKS_DIR / f"task_{task['id']}.json").write_text(json.dumps(task, indent=2))
+        (TASKS_DIR / f"task_{task['id']}.json").write_text(json.dumps(task, indent=2, ensure_ascii=False))
 
     def create(self, subject: str, description: str = "") -> str:
         task = {"id": self._next_id(), "subject": subject, "description": description,
                 "status": "pending", "owner": None, "blockedBy": [], "blocks": []}
         self._save(task)
-        return json.dumps(task, indent=2)
+        return json.dumps(task, indent=2, ensure_ascii=False)
 
     def get(self, tid: int) -> str:
-        return json.dumps(self._load(tid), indent=2)
+        return json.dumps(self._load(tid), indent=2, ensure_ascii=False)
 
     def update(self, tid: int, status: str = None,
                add_blocked_by: list = None, add_blocks: list = None) -> str:
@@ -304,7 +304,7 @@ class TaskManager:
         if add_blocks:
             task["blocks"] = list(set(task["blocks"] + add_blocks))
         self._save(task)
-        return json.dumps(task, indent=2)
+        return json.dumps(task, indent=2, ensure_ascii=False)
 
     def list_all(self) -> str:
         tasks = [json.loads(f.read_text()) for f in sorted(TASKS_DIR.glob("task_*.json"))]
@@ -372,7 +372,7 @@ class MessageBus:
                "timestamp": time.time()}
         if extra: msg.update(extra)
         with open(INBOX_DIR / f"{to}.jsonl", "a") as f:
-            f.write(json.dumps(msg) + "\n")
+            f.write(json.dumps(msg, ensure_ascii=False) + "\n")
         return f"Sent {msg_type} to {to}"
 
     def read_inbox(self, name: str) -> list:
@@ -412,7 +412,7 @@ class TeammateManager:
         return {"team_name": "default", "members": []}
 
     def _save(self):
-        self.config_path.write_text(json.dumps(self.config, indent=2))
+        self.config_path.write_text(json.dumps(self.config, indent=2, ensure_ascii=False))
 
     def _find(self, name: str) -> dict:
         for m in self.config["members"]:
@@ -461,7 +461,7 @@ class TeammateManager:
                     if msg.get("type") == "shutdown_request":
                         self._set_status(name, "shutdown")
                         return
-                    messages.append({"role": "user", "content": json.dumps(msg)})
+                    messages.append({"role": "user", "content": json.dumps(msg, ensure_ascii=False)})
                 try:
                     response = client.messages.create(
                         model=MODEL, system=sys_prompt, messages=messages,
@@ -505,7 +505,7 @@ class TeammateManager:
                         if msg.get("type") == "shutdown_request":
                             self._set_status(name, "shutdown")
                             return
-                        messages.append({"role": "user", "content": json.dumps(msg)})
+                        messages.append({"role": "user", "content": json.dumps(msg, ensure_ascii=False)})
                     resume = True
                     break
                 unclaimed = []
@@ -593,7 +593,7 @@ TOOL_HANDLERS = {
     "spawn_teammate":   lambda **kw: TEAM.spawn(kw["name"], kw["role"], kw["prompt"]),
     "list_teammates":   lambda **kw: TEAM.list_all(),
     "send_message":     lambda **kw: BUS.send("lead", kw["to"], kw["content"], kw.get("msg_type", "message")),
-    "read_inbox":       lambda **kw: json.dumps(BUS.read_inbox("lead"), indent=2),
+    "read_inbox":       lambda **kw: json.dumps(BUS.read_inbox("lead"), indent=2, ensure_ascii=False),
     "broadcast":        lambda **kw: BUS.broadcast("lead", kw["content"], TEAM.member_names()),
     "shutdown_request": lambda **kw: handle_shutdown_request(kw["teammate"]),
     "plan_approval":    lambda **kw: handle_plan_review(kw["request_id"], kw["approve"], kw.get("feedback", "")),
@@ -669,7 +669,7 @@ def agent_loop(messages: list):
         # s10: check lead inbox
         inbox = BUS.read_inbox("lead")
         if inbox:
-            messages.append({"role": "user", "content": f"<inbox>{json.dumps(inbox, indent=2)}</inbox>"})
+            messages.append({"role": "user", "content": f"<inbox>{json.dumps(inbox, indent=2, ensure_ascii=False)}</inbox>"})
             messages.append({"role": "assistant", "content": "Noted inbox messages."})
         # LLM call
         response = client.messages.create(
@@ -729,7 +729,7 @@ if __name__ == "__main__":
             print(TEAM.list_all())
             continue
         if query.strip() == "/inbox":
-            print(json.dumps(BUS.read_inbox("lead"), indent=2))
+            print(json.dumps(BUS.read_inbox("lead"), indent=2, ensure_ascii=False))
             continue
         history.append({"role": "user", "content": query})
         agent_loop(history)

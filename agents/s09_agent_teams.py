@@ -144,7 +144,7 @@ class TeammateManager:
         return {"team_name": "default", "members": []}
 
     def _save_config(self):
-        self.config_path.write_text(json.dumps(self.config, indent=2))
+        self.config_path.write_text(json.dumps(self.config, indent=2, ensure_ascii=False), encoding="utf-8")
 
     def _find_member(self, name: str) -> dict:
         for m in self.config["members"]:
@@ -155,12 +155,14 @@ class TeammateManager:
     def spawn(self, name: str, role: str, prompt: str) -> str:
         member = self._find_member(name)
         if member:
-            if member["status"] not in ("idle", "shutdown"):
+            thread = self.threads.get(name)
+            if thread and thread.is_alive():
                 return f"Error: '{name}' is currently {member['status']}"
-            member["status"] = "working"
+            member["status"] = "idle"
             member["role"] = role
+            member["prompt"] = prompt
         else:
-            member = {"name": name, "role": role, "status": "working"}
+            member = {"name": name, "role": role, "status": "idle", "prompt": prompt}
             self.config["members"].append(member)
         self._save_config()
         thread = threading.Thread(
@@ -175,44 +177,61 @@ class TeammateManager:
     def _teammate_loop(self, name: str, role: str, prompt: str):
         sys_prompt = (
             f"You are '{name}', role: {role}, at {WORKDIR}. "
-            f"Use send_message to communicate. Complete your task."
+            f"Use send_message to communicate. Stay available for new inbox messages until shutdown."
         )
         messages = [{"role": "user", "content": prompt}]
         tools = self._teammate_tools()
-        for _ in range(50):
+        while True:
+            member = self._find_member(name)
+            if not member or member.get("status") == "shutdown":
+                break
             inbox = BUS.read_inbox(name)
-            for msg in inbox:
-                messages.append({"role": "user", "content": json.dumps(msg)})
-            try:
-                response = client.messages.create(
-                    model=MODEL,
-                    system=sys_prompt,
-                    messages=messages,
-                    tools=tools,
-                    max_tokens=8000,
-                )
-            except Exception:
-                break
-            messages.append({"role": "assistant", "content": response.content})
-            if response.stop_reason != "tool_use":
-                break
-            results = []
-            for block in response.content:
-                if block.type == "tool_use":
-                    output = self._exec(name, block.name, block.input)
-                    print(f"  [{name}] {block.name}: {str(output)[:120]}")
-                    results.append(
-                        {
-                            "type": "tool_result",
-                            "tool_use_id": block.id,
-                            "content": str(output),
-                        }
-                    )
-            messages.append({"role": "user", "content": results})
-        member = self._find_member(name)
-        if member and member["status"] != "shutdown":
-            member["status"] = "idle"
+            if not inbox:
+                if member.get("status") != "idle":
+                    member["status"] = "idle"
+                    self._save_config()
+                time.sleep(1)
+                continue
+            member["status"] = "working"
             self._save_config()
+            for msg in inbox:
+                messages.append({"role": "user", "content": json.dumps(msg, ensure_ascii=False)})
+            for _ in range(50):
+                try:
+                    response = client.messages.create(
+                        model=MODEL,
+                        system=sys_prompt,
+                        messages=messages,
+                        tools=tools,
+                        max_tokens=8000,
+                    )
+                except Exception as e:
+                    BUS.send(name, "lead", f"Teammate error: {e}")
+                    member = self._find_member(name)
+                    if member and member.get("status") != "shutdown":
+                        member["status"] = "idle"
+                        self._save_config()
+                    break
+                messages.append({"role": "assistant", "content": response.content})
+                if response.stop_reason != "tool_use":
+                    break
+                results = []
+                for block in response.content:
+                    if block.type == "tool_use":
+                        output = self._exec(name, block.name, block.input)
+                        print(f"  [{name}] {block.name}: {str(output)[:120]}")
+                        results.append(
+                            {
+                                "type": "tool_result",
+                                "tool_use_id": block.id,
+                                "content": str(output),
+                            }
+                        )
+                messages.append({"role": "user", "content": results})
+            member = self._find_member(name)
+            if member and member.get("status") != "shutdown":
+                member["status"] = "idle"
+                self._save_config()
 
     def _exec(self, sender: str, tool_name: str, args: dict) -> str:
         # these base tools are unchanged from s02
@@ -229,7 +248,7 @@ class TeammateManager:
                 sender, args["to"], args["content"], args.get("msg_type", "message")
             )
         if tool_name == "read_inbox":
-            return json.dumps(BUS.read_inbox(sender), indent=2)
+            return json.dumps(BUS.read_inbox(sender), indent=2, ensure_ascii=False)
         return f"Unknown tool: {tool_name}"
 
     def _teammate_tools(self) -> list:
@@ -383,7 +402,7 @@ TOOL_HANDLERS = {
     "send_message": lambda **kw: BUS.send(
         "lead", kw["to"], kw["content"], kw.get("msg_type", "message")
     ),
-    "read_inbox": lambda **kw: json.dumps(BUS.read_inbox("lead"), indent=2),
+    "read_inbox": lambda **kw: json.dumps(BUS.read_inbox("lead"), indent=2, ensure_ascii=False),
     "broadcast": lambda **kw: BUS.broadcast("lead", kw["content"], TEAM.member_names()),
 }
 
@@ -484,7 +503,7 @@ def agent_loop(messages: list):
             messages.append(
                 {
                     "role": "user",
-                    "content": f"<inbox>{json.dumps(inbox, indent=2)}</inbox>",
+                    "content": f"<inbox>{json.dumps(inbox, indent=2, ensure_ascii=False)}</inbox>",
                 }
             )
             messages.append(
@@ -539,7 +558,7 @@ if __name__ == "__main__":
             print(TEAM.list_all())
             continue
         if query.strip() == "/inbox":
-            print(json.dumps(BUS.read_inbox("lead"), indent=2))
+            print(json.dumps(BUS.read_inbox("lead"), indent=2, ensure_ascii=False))
             continue
         history.append({"role": "user", "content": query})
         agent_loop(history)
